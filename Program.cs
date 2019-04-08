@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using FilmsExpressionTree.Models;
 
@@ -103,45 +104,128 @@ namespace FilmsExpressionTree
             f5.AddGenre(comedy);
             yield return f5;
         }
+
+        static IEnumerable<IToken> Tokenize(string query)
+        {
+            Scanner scanner = new Scanner(query);
+            IToken token = scanner.Next();
+            yield return token;
+            while (token.Type != TokenType.End)
+            {
+                token = scanner.Next();
+                yield return token;
+            }
+        }
+
+        static IEnumerable<IToken> TransformToPolishNotation(List<IToken> infixTokenList)
+        {
+            Queue<IToken> queue = new Queue<IToken>();
+            Stack<IToken> stack = new Stack<IToken>();
+
+            int index = 0;
+            while (infixTokenList.Count > index)
+            {
+                IToken t = infixTokenList[index];
+
+                switch (t.Type)
+                {
+                    case TokenType.Literal:
+                    case TokenType.Function:
+                    case TokenType.Property:
+                        queue.Enqueue(t);
+                        break;
+                    case TokenType.Operator:
+                        stack.Push(t);
+                        break;
+                    case TokenType.End:
+                    default:
+                        break;
+                }
+
+                ++index;
+            }
+            while (stack.Count > 0)
+            {
+                queue.Enqueue(stack.Pop());
+            }
+            return queue.Reverse().ToList();
+        }
+
+        static Expression BuildExpressionTree(ref List<IToken>.Enumerator enumerator, ref ParameterExpression param)
+        {
+            if (enumerator.MoveNext())
+            {
+                switch (enumerator.Current.Type)
+                {
+                    case TokenType.Literal:
+                        {
+                            int num = Int32.Parse(enumerator.Current.Value);
+                            ConstantExpression constant = Expression.Constant(num, typeof(int));
+                            return constant;
+                        }
+                    /*case TokenType.Function:
+                    {
+                        string value = enumerator.Current.Value;
+                        Expression funcParam = BuildExpressionTree(ref enumerator, ref param);
+                        return null;
+                    }*/
+                    case TokenType.Property:
+                        {
+                            string value = enumerator.Current.Value;
+                            Expression obj = BuildExpressionTree(ref enumerator, ref param);
+                            MemberExpression me = null;
+                            if (string.Equals(value, ".year", StringComparison.OrdinalIgnoreCase))
+                                me = Expression.Property(obj, "Year");
+                            else if (string.Equals(value, ".title", StringComparison.OrdinalIgnoreCase))
+                                me = Expression.Property(obj, "Title");
+                            return me;
+                        }
+                    case TokenType.Operator:
+                        {
+                            string value = enumerator.Current.Value;
+                            Expression right = BuildExpressionTree(ref enumerator, ref param);
+                            Expression left = BuildExpressionTree(ref enumerator, ref param);
+                            BinaryExpression expr = null;
+                            if (value == "<")
+                                expr = Expression.LessThan(left, right);
+                            else if (value == ">")
+                                expr = Expression.GreaterThan(left, right);
+                            else if (value == "=")
+                                expr = Expression.Equal(left, right);
+                            return expr;
+                        }
+                    case TokenType.End:
+                    default:
+                        return null;
+                }
+            }
+
+            param = Expression.Parameter(typeof(Film), "film");
+            return param;
+        }
+
         static void Main(string[] args)
         {
             var films = SeedData();
             Console.WriteLine("----");
             Console.WriteLine("Enter the request: ");
             string query = Console.ReadLine();
-            string[] parts = query.Split(';');
-            foreach (var part in parts)
+            var tokens = Tokenize(query);
+            var polished = TransformToPolishNotation(tokens.ToList());
+            var plist = polished.ToList();
+            plist.Add(tokens.Last());
+
+            var enumerator = polished.ToList().GetEnumerator();
+            ParameterExpression pe = null;
+            var expr = BuildExpressionTree(ref enumerator, ref pe);
+            var check = Expression.Lambda<Func<Film, bool>>(expr, new[] { pe }).Compile();
+
+            foreach (var film in films)
             {
-                //Console.WriteLine(part);
-                string[] items = part.Split(' ');
-                if (items.Length == 3)
-                {
-                    ParameterExpression pe = Expression.Parameter(typeof(Film), "f");
-
-                    MemberExpression me = null;
-                    if (string.Equals(items[0], "year", StringComparison.OrdinalIgnoreCase))
-                        me = Expression.Property(pe, "Year");
-
-                    int year = Int32.Parse(items[2]);
-                    ConstantExpression constant = Expression.Constant(year, typeof(int));
-                    
-                    BinaryExpression expr = null;
-                    if (items[1] == "<")
-                        expr = Expression.LessThan(me, constant);
-                    else if (items[1] == ">")
-                        expr = Expression.GreaterThan(me, constant);
-                    else if (items[1] == "=")
-                        expr = Expression.Equal(me, constant);
-
-                    var check = Expression.Lambda<Func<Film, bool>>(expr, new[] { pe }).Compile();
-
-                    foreach (var film in films)
-                    {
-                        bool res = check(film);
-                        int gg = 6;
-                    }
-                }
+                bool res = check(film);
+                int gg = 6;
             }
+
             Console.WriteLine("---");
         }
     }
