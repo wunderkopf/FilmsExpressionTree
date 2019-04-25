@@ -9,6 +9,7 @@ namespace FilmsExpressionTree
         Literal,
         Function,
         Property,
+        Operation,
         End
     }
     public interface IToken

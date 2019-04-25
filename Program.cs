@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 using FilmsExpressionTree.Models;
 
 namespace FilmsExpressionTree
@@ -130,11 +131,11 @@ namespace FilmsExpressionTree
                 switch (t.Type)
                 {
                     case TokenType.Literal:
-                    case TokenType.Function:
                     case TokenType.Property:
                         queue.Enqueue(t);
                         break;
                     case TokenType.Operator:
+                    case TokenType.Function:
                         stack.Push(t);
                         break;
                     case TokenType.End:
@@ -159,16 +160,28 @@ namespace FilmsExpressionTree
                 {
                     case TokenType.Literal:
                         {
-                            int num = Int32.Parse(enumerator.Current.Value);
-                            ConstantExpression constant = Expression.Constant(num, typeof(int));
+                            ConstantExpression constant = null;
+                            if (enumerator.Current.Value.StartsWith("'") && enumerator.Current.Value.EndsWith("'"))
+                            {
+                                string str = enumerator.Current.Value.Trim('\'');
+                                constant = Expression.Constant(str, typeof(string));
+                            }
+                            else
+                            {
+                                int num = Int32.Parse(enumerator.Current.Value);
+                                constant = Expression.Constant(num, typeof(int));
+                            }
                             return constant;
                         }
-                    /*case TokenType.Function:
+                    case TokenType.Function:
                     {
                         string value = enumerator.Current.Value;
-                        Expression funcParam = BuildExpressionTree(ref enumerator, ref param);
-                        return null;
-                    }*/
+                        MethodInfo method = typeof(string).GetMethod(value, new[] { typeof(string) });
+                        Expression right = BuildExpressionTree(ref enumerator, ref param);
+                        Expression left = BuildExpressionTree(ref enumerator, ref param);
+                        MethodCallExpression funcParam = Expression.Call(left, method, right);
+                        return funcParam;
+                    }
                     case TokenType.Property:
                         {
                             string value = enumerator.Current.Value;
@@ -192,6 +205,10 @@ namespace FilmsExpressionTree
                                 expr = Expression.GreaterThan(left, right);
                             else if (value == "=")
                                 expr = Expression.Equal(left, right);
+                            else if (value == ">=")
+                                expr = Expression.GreaterThanOrEqual(left, right);
+                            else if (value == "<=")
+                                expr = Expression.LessThanOrEqual(left, right);
                             return expr;
                         }
                     case TokenType.End:
@@ -223,7 +240,7 @@ namespace FilmsExpressionTree
             foreach (var film in films)
             {
                 bool res = check(film);
-                int gg = 6;
+                Console.WriteLine($"Title '{film.Title}', Year '{film.Year}' ----> {res}");
             }
 
             Console.WriteLine("---");

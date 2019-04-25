@@ -16,7 +16,13 @@ namespace FilmsExpressionTree
 
             static private List<string> functions = new List<string>()
             {
-                "contains"
+                "Contains"
+            };
+
+            static private List<char> operations = new List<char>()
+            {
+                '&',
+                '|'
             };
 
             public TokenType Type { get; set; }
@@ -35,14 +41,15 @@ namespace FilmsExpressionTree
                 else
                 {
                     char ch = (char)c;
-                    string tokenValue = new string(new char[] { ch });
+                    // TODO: use list or other collection instead of string
+                    string tokenValue = ch.ToString();
                     if (operators.Contains(ch))
                     {
                         Type = TokenType.Operator;
                         if (operators.Contains((char)reader.Peek()))
                         {
                             ch = (char)reader.Read();
-                            tokenValue += ch;
+                            tokenValue += ch.ToString();
                         }
                         Value = tokenValue;
                     }
